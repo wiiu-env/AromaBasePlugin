@@ -43,6 +43,8 @@ INITIALIZE_PLUGIN() {
         if (cat_config != nullptr) {
             LOAD_BOOL_FROM_STORAGE(cat_config, USTEALTH_CONFIG_ID, gActivateUStealth);
             LOAD_BOOL_FROM_STORAGE(cat_config, POWEROFFWARNING_CONFIG_ID, gSkip4SecondOffStatusCheck);
+            LOAD_BOOL_FROM_STORAGE(cat_config, FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID, gForceNDMSuspendSuccess);
+            LOAD_BOOL_FROM_STORAGE(cat_config, ALLOW_ERROR_NOTIFICATIONS, gAllowErrorNotifications);
         }
 
         wups_storage_item_t *cat_other = nullptr;
@@ -92,6 +94,22 @@ DEINITIALIZE_PLUGIN() {
     RPXLoader_DeInitLibrary();
 }
 
+DECL_FUNCTION(uint32_t, SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv) {
+    auto res = real_SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv();
+
+    if (res != 0) {
+        DEBUG_FUNCTION_LINE_ERR("SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv returned %08X", res);
+        if (res == 0xA0B12C80 && gForceNDMSuspendSuccess) {
+            DEBUG_FUNCTION_LINE_INFO("Patch SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv to return 0 instead of %08X", res);
+            return 0;
+        } else if (gAllowErrorNotifications) {
+            NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_ERROR, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 10.0f);
+            NotificationModule_AddErrorNotification("\"nn::ndm::SuspendDaemonsAndDisconnectIfWireless\" failed. Connection to 3DS not possible");
+        }
+    }
+    return res;
+}
+
 DECL_FUNCTION(int32_t, IsStorageMaybePcFormatted, bool *isPcFormatted, nn::spm::StorageIndex *index) {
     // Make sure the index is valid
     int32_t res = real_IsStorageMaybePcFormatted(isPcFormatted, index);
@@ -114,3 +132,4 @@ DECL_FUNCTION(bool, MCP_Get4SecondOffStatus, int32_t handle) {
 // Only replace for the Wii U Menu
 WUPS_MUST_REPLACE_FOR_PROCESS(IsStorageMaybePcFormatted, WUPS_LOADER_LIBRARY_NN_SPM, IsStorageMaybePcFormatted__Q2_2nn3spmFPbQ3_2nn3spm12StorageIndex, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
 WUPS_MUST_REPLACE_FOR_PROCESS(MCP_Get4SecondOffStatus, WUPS_LOADER_LIBRARY_COREINIT, MCP_Get4SecondOffStatus, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
+WUPS_MUST_REPLACE(SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv, WUPS_LOADER_LIBRARY_NN_NDM, SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv);
