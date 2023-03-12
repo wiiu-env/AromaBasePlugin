@@ -18,6 +18,21 @@ void ShowHints() {
     if (sShutdownHintThread || !isOverlayReady) {
         return;
     }
+
+    const char *tmp_file = "fs:/vol/external01/wiiu/write_lock";
+    int fd               = -1;
+    if ((fd = open(tmp_file, O_CREAT | O_TRUNC | O_RDWR)) < 0) {
+        NotificationModuleStatus err;
+        NMColor red = {237, 28, 36, 255};
+        NotificationModuleHandle outHandle;
+        if ((err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_DYNAMIC, NOTIFICATION_MODULE_DEFAULT_OPTION_BACKGROUND_COLOR, red)) == NOTIFICATION_MODULE_RESULT_SUCCESS &&
+            (err = NotificationModule_AddDynamicNotification("Failed to write to the sd card. Please restart the console and make sure the sd card is not write locked.", &outHandle)) == NOTIFICATION_MODULE_RESULT_SUCCESS) {
+        }
+    } else {
+        close(fd);
+        remove(tmp_file);
+    }
+
     if (!gConfigMenuHintShown) {
         NotificationModuleStatus err;
         if ((err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f)) == NOTIFICATION_MODULE_RESULT_SUCCESS &&
@@ -37,12 +52,9 @@ void ShowHints() {
 }
 
 void StartHintThread() {
-    if (!gConfigMenuHintShown) {
-        sShutdownHintThread = false;
-        sShowHintThread     = std::make_unique<std::thread>(ShowHints);
-    } else {
-        sShowHintThread.reset();
-    }
+    sShowHintThread.reset();
+    sShutdownHintThread = false;
+    sShowHintThread     = std::make_unique<std::thread>(ShowHints);
 }
 
 void StopHintThread() {
