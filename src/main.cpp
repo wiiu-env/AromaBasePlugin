@@ -9,6 +9,7 @@
 #include <nn/spm.h>
 #include <notifications/notifications.h>
 #include <rpxloader/rpxloader.h>
+#include <sdutils/sdutils.h>
 #include <utils/logger.h>
 #include <wups.h>
 
@@ -21,6 +22,8 @@ WUPS_PLUGIN_LICENSE("GPL");
 WUPS_USE_WUT_DEVOPTAB();
 WUPS_USE_STORAGE("aroma_base_plugin"); // Unique id for the storage api
 
+static bool sSDUtilsInitDone = false;
+
 INITIALIZE_PLUGIN() {
     initLogging();
     if (NotificationModule_InitLibrary() != NOTIFICATION_MODULE_RESULT_SUCCESS) {
@@ -28,6 +31,9 @@ INITIALIZE_PLUGIN() {
     }
     if (RPXLoader_InitLibrary() != RPX_LOADER_RESULT_SUCCESS) {
         DEBUG_FUNCTION_LINE_ERR("RPXLoader_InitLibrary failed");
+    }
+    if (SDUtils_InitLibrary() != SDUTILS_RESULT_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("SDUtils_InitLibrary failed");
     }
 
     // Open storage to read values
@@ -92,6 +98,7 @@ ON_APPLICATION_ENDS() {
 DEINITIALIZE_PLUGIN() {
     NotificationModule_DeInitLibrary();
     RPXLoader_DeInitLibrary();
+    SDUtils_DeInitLibrary();
 }
 
 DECL_FUNCTION(uint32_t, SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv) {
