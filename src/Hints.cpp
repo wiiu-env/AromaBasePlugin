@@ -4,6 +4,7 @@
 #include <coreinit/thread.h>
 #include <notifications/notification_defines.h>
 #include <notifications/notifications.h>
+#include <sdutils/sdutils.h>
 #include <thread>
 
 std::unique_ptr<std::thread> sShowHintThread;
@@ -19,18 +20,30 @@ void ShowHints() {
         return;
     }
 
-    const char *tmp_file = "fs:/vol/external01/wiiu/write_lock";
-    int fd               = -1;
-    if ((fd = open(tmp_file, O_CREAT | O_TRUNC | O_RDWR)) < 0) {
-        NotificationModuleStatus err;
-        NMColor red = {237, 28, 36, 255};
-        NotificationModuleHandle outHandle;
-        if ((err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_DYNAMIC, NOTIFICATION_MODULE_DEFAULT_OPTION_BACKGROUND_COLOR, red)) == NOTIFICATION_MODULE_RESULT_SUCCESS &&
-            (err = NotificationModule_AddDynamicNotification("Failed to write to the sd card. Please restart the console and make sure the sd card is not write locked.", &outHandle)) == NOTIFICATION_MODULE_RESULT_SUCCESS) {
+    bool isMounted = false;
+    if (SDUtils_IsSdCardMounted(&isMounted) != SDUTILS_RESULT_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("SDUtils_IsSdCardMounted failed");
+    }
+
+    if (isMounted) {
+        const char *tmp_file = "fs:/vol/external01/wiiu/write_lock";
+        int fd               = -1;
+        if ((fd = open(tmp_file, O_CREAT | O_TRUNC | O_RDWR)) < 0) {
+            DEBUG_FUNCTION_LINE_VERBOSE("SD Card mounted but not writable");
+            NotificationModuleStatus err;
+            NMColor red = {237, 28, 36, 255};
+            NotificationModuleHandle outHandle;
+            if ((err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_DYNAMIC, NOTIFICATION_MODULE_DEFAULT_OPTION_BACKGROUND_COLOR, red)) != NOTIFICATION_MODULE_RESULT_SUCCESS ||
+                (err = NotificationModule_AddDynamicNotification("Failed to write to the sd card. Please restart the console and make sure the sd card is not write locked.", &outHandle)) != NOTIFICATION_MODULE_RESULT_SUCCESS) {
+                DEBUG_FUNCTION_LINE_ERR("Failed to display notification: %s", NotificationModule_GetStatusStr(err));
+            }
+        } else {
+            DEBUG_FUNCTION_LINE_VERBOSE("SD Card is mounted and writeable");
+            close(fd);
+            remove(tmp_file);
         }
     } else {
-        close(fd);
-        remove(tmp_file);
+        DEBUG_FUNCTION_LINE_VERBOSE("SD Card is not mounted");
     }
 
     if (!gConfigMenuHintShown) {
