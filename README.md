@@ -11,6 +11,7 @@ Provides some simple patches for Wii U Menu and checks for Aroma updates.
 3. Requires the [CURLWrapperModule](https://github.com/wiiu-env/CURLWrapperModule) in `sd:/wiiu/environments/[ENVIRONMENT]/modules`.
 4. Requires the [NotificationModule](https://github.com/wiiu-env/NotificationModule) in `sd:/wiiu/environments/[ENVIRONMENT]/modules`.
 5. Requires the [RPXLoadingModule](https://github.com/wiiu-env/RPXLoadingModule) in `sd:/wiiu/environments/[ENVIRONMENT]/modules`.
+6. Requires the [SDHotSwapModule](https://github.com/wiiu-env/SDHotSwapModule) in `sd:/wiiu/environments/[ENVIRONMENT]/modules`.
 
 ## Usage
 
@@ -34,6 +35,7 @@ For building you need:
 - [libnotifications](https://github.com/wiiu-env/libnotifications)
 - [librpxloader](https://github.com/wiiu-env/librpxloader)
 - [libcurlwrapper](https://github.com/wiiu-env/libcurlwrapper)
+- [libsdutils](https://github.com/wiiu-env/libsdutils)
 
 ## Building using the Dockerfile
 
