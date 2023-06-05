@@ -13,7 +13,7 @@
 #include <utils/logger.h>
 #include <wups.h>
 
-WUPS_PLUGIN_NAME("AromaBasePlugin");
+WUPS_PLUGIN_NAME("Aroma Base Plugin");
 WUPS_PLUGIN_DESCRIPTION("Implements small patches and checks for Aroma updates.");
 WUPS_PLUGIN_VERSION(PLUGIN_VERSION_FULL);
 WUPS_PLUGIN_AUTHOR("Maschell");
