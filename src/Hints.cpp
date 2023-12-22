@@ -5,10 +5,14 @@
 #include <notifications/notification_defines.h>
 #include <notifications/notifications.h>
 #include <sdutils/sdutils.h>
+#include <sys/fcntl.h>
+#include <sys/unistd.h>
 #include <thread>
 
 std::unique_ptr<std::thread> sShowHintThread;
 static bool sShutdownHintThread = false;
+
+bool SaveHintShownToStorage(bool hintShown);
 
 void ShowHints() {
     bool isOverlayReady = false;
@@ -50,18 +54,29 @@ void ShowHints() {
         NotificationModuleStatus err;
         if ((err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f)) == NOTIFICATION_MODULE_RESULT_SUCCESS &&
             (err = NotificationModule_AddInfoNotification("Tip: You can open a configuration menu by pressing \ue052 + \ue07A + \ue046")) == NOTIFICATION_MODULE_RESULT_SUCCESS) {
-            if (WUPS_OpenStorage() == WUPS_STORAGE_ERROR_SUCCESS) {
-                gConfigMenuHintShown           = true;
-                wups_storage_item_t *cat_other = nullptr;
-                if (WUPS_GetSubItem(nullptr, CAT_OTHER, &cat_other) == WUPS_STORAGE_ERROR_SUCCESS) {
-                    WUPS_StoreInt(cat_other, CONFIG_MENU_HINT_SHOWN_ID, gConfigMenuHintShown);
-                }
-                WUPS_CloseStorage();
-            }
+
+            gConfigMenuHintShown = true;
+            SaveHintShownToStorage(gConfigMenuHintShown);
         } else {
             DEBUG_FUNCTION_LINE_ERR("Failed to show Notification: %d %s", err, NotificationModule_GetStatusStr(err));
         }
     }
+}
+
+bool SaveHintShownToStorage(bool hintShown) {
+    WUPSStorageError storageError;
+    auto subItem = WUPSStorageAPI::GetSubItem(CAT_OTHER, storageError);
+    if (!subItem) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to get sub category");
+        return false;
+    }
+    storageError = subItem->Store(CONFIG_MENU_HINT_SHOWN_ID, hintShown);
+    if (storageError != WUPS_STORAGE_ERROR_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to store hint shown");
+        return false;
+    }
+
+    return WUPSStorageAPI::SaveStorage() == WUPS_STORAGE_ERROR_SUCCESS;
 }
 
 void StartHintThread() {

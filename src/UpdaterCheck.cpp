@@ -11,14 +11,17 @@
 #include <padscore/wpad.h>
 #include <rpxloader/rpxloader.h>
 #include <string>
+#include <sys/stat.h>
 #include <thread>
 #include <vpad/input.h>
+#include <wups/function_patching.h>
 
 static NotificationModuleHandle sAromaUpdateHandle = 0;
 std::unique_ptr<std::thread> sCheckUpdateThread;
 static bool sShutdownUpdateThread = false;
 void UpdateCheckThreadEntry();
 
+void ShowUpdateNotification();
 constexpr uint32_t HIDE_UPDATE_WARNING_VPAD_COMBO  = VPAD_BUTTON_MINUS;
 constexpr uint32_t LAUNCH_AROMA_UPDATER_VPAD_COMBO = VPAD_BUTTON_PLUS;
 constexpr uint32_t sHoldForFramesTarget            = 60;
@@ -41,6 +44,26 @@ void StopUpdaterCheckThread() {
     }
 }
 
+bool saveLatestUpdateHash(const std::string &hash) {
+    WUPSStorageError err;
+    auto subItem = WUPSStorageAPI::GetSubItem(CAT_OTHER, err);
+    if (!subItem) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to get sub category");
+        return false;
+    }
+    if (subItem->Store(LAST_UPDATE_HASH_ID, hash) != WUPS_STORAGE_ERROR_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to store latest update hash");
+        return false;
+    }
+
+    if (WUPSStorageAPI::SaveStorage() != WUPS_STORAGE_ERROR_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to save strorage");
+        return false;
+    }
+
+    return true;
+}
+
 void UpdateCheckThreadEntry() {
     bool isOverlayReady = false;
     while (!sShutdownUpdateThread &&
@@ -57,45 +80,46 @@ void UpdateCheckThreadEntry() {
     std::string errorTextOut;
     float progress;
 
-    if (DownloadUtils::DownloadFileToBuffer(AROMA_UPDATER_LAST_UPDATE_URL, outBuffer, responseCodeOut, errorOut, errorTextOut, &progress) == 0) {
-        try {
-            AromaUpdater::LatestVersion data = nlohmann::json::parse(outBuffer);
-            gUpdateChecked                   = true;
-            if (gLastHash.empty()) { // don't show update warning on first boot
-                gLastHash = data.getHash();
-            } else if (gLastHash != data.getHash()) {
-                struct stat st {};
-                if (stat(AROMA_UPDATER_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
-                    NotificationModuleStatus err;
-                    if ((err = NotificationModule_AddDynamicNotification("A new Aroma Update is available. "
-                                                                         "Hold \ue045 to launch the Aroma Updater, press \ue046 to hide this message",
-                                                                         &sAromaUpdateHandle)) != NOTIFICATION_MODULE_RESULT_SUCCESS) {
-                        DEBUG_FUNCTION_LINE_ERR("Failed to add update notification. %s", NotificationModule_GetStatusStr(err));
-                        sAromaUpdateHandle = 0;
-                    }
-                } else {
-                    NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f);
-                    NotificationModule_AddInfoNotification("A new Aroma Update is available. Please launch the Aroma Updater!");
-                }
+    if (DownloadUtils::DownloadFileToBuffer(AROMA_UPDATER_LAST_UPDATE_URL, outBuffer, responseCodeOut, errorOut, errorTextOut, &progress) != 0) {
+        DEBUG_FUNCTION_LINE_INFO("Download failed: %d %s", errorOut, errorTextOut.c_str());
+        return;
+    }
+    try {
+        AromaUpdater::LatestVersion data = nlohmann::json::parse(outBuffer);
+        gUpdateChecked                   = true;
 
-                gLastHash = data.getHash();
-            } else {
-                DEBUG_FUNCTION_LINE_VERBOSE("We don't need to update the hash");
-                return;
-            }
+        if (gLastHash == data.getHash()) {
+            DEBUG_FUNCTION_LINE_VERBOSE("We don't need to update the hash");
+            return;
+        }
 
-            if (WUPS_OpenStorage() == WUPS_STORAGE_ERROR_SUCCESS) {
-                wups_storage_item_t *cat_other = nullptr;
-                if (WUPS_GetSubItem(nullptr, CAT_OTHER, &cat_other) == WUPS_STORAGE_ERROR_SUCCESS) {
-                    WUPS_StoreString(cat_other, LAST_UPDATE_HASH_ID, gLastHash.c_str());
-                }
-                WUPS_CloseStorage();
-            }
-        } catch (std::exception &e) {
-            DEBUG_FUNCTION_LINE_WARN("Failed to parse AromaUpdater::LatestVersion");
+        // Update hash
+        gLastHash = data.getHash();
+
+        if (!gLastHash.empty()) { // don't show update warning on first boot
+            ShowUpdateNotification();
+        }
+
+        saveLatestUpdateHash(gLastHash);
+    } catch (std::exception &e) {
+        DEBUG_FUNCTION_LINE_WARN("Failed to parse AromaUpdater::LatestVersion");
+    }
+}
+
+void ShowUpdateNotification() {
+    struct stat st {};
+    // Check if the Aroma Updater is on the sd card
+    if (stat(AROMA_UPDATER_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+        NotificationModuleStatus err;
+        if ((err = NotificationModule_AddDynamicNotification("A new Aroma Update is available. "
+                                                             "Hold \ue045 to launch the Aroma Updater, press \ue046 to hide this message",
+                                                             &sAromaUpdateHandle)) != NOTIFICATION_MODULE_RESULT_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to add update notification. %s", NotificationModule_GetStatusStr(err));
+            sAromaUpdateHandle = 0;
         }
     } else {
-        DEBUG_FUNCTION_LINE_INFO("Download failed: %d %s", errorOut, errorTextOut.c_str());
+        NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f);
+        NotificationModule_AddInfoNotification("A new Aroma Update is available. Please launch the Aroma Updater!");
     }
 }
 
@@ -158,6 +182,7 @@ DECL_FUNCTION(int32_t, VPADRead, VPADChan chan,
 
 static uint32_t sWPADLastButtonHold[4] = {0, 0, 0, 0};
 static uint32_t sHoldForXFramesWPAD[4] = {0, 0, 0, 0};
+
 DECL_FUNCTION(void, WPADRead, WPADChan chan, WPADStatusProController *data) {
     real_WPADRead(chan, data);
     if (!sAromaUpdateHandle) {

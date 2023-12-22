@@ -1,52 +1,75 @@
 #include "config.h"
 
-bool gActivateUStealth          = false;
-bool gSkip4SecondOffStatusCheck = true;
-bool gConfigMenuHintShown       = false;
-bool gUpdateChecked             = false;
-bool gForceNDMSuspendSuccess    = true;
-bool gAllowErrorNotifications   = true;
-std::string gLastHash           = {};
+bool gActivateUStealth          = ACTIVATE_USTEALTH_DEFAULT;
+bool gSkip4SecondOffStatusCheck = SKIP_4_SECOND_OFF_STATUS_CHECK_DEFAULT;
+bool gConfigMenuHintShown       = CONFIG_MENU_HINT_SHOWN_DEFAULT;
+bool gUpdateChecked             = UPDATE_CHECKED_DEFAULT;
+bool gForceNDMSuspendSuccess    = FORCE_NDM_SUSPEND_SUCCESS_DEFAULT;
+bool gAllowErrorNotifications   = ALLOW_ERROR_NOTIFICATIONS_DEFAULT;
+std::string gLastHash           = LAST_UPDATE_HASH_DEFAULT;
 
 void boolItemChangedConfig(ConfigItemBoolean *item, bool newValue) {
-    wups_storage_item_t *cat_config;
-    if (WUPS_GetSubItem(nullptr, CAT_CONFIG, &cat_config) == WUPS_STORAGE_ERROR_SUCCESS) {
-        PROCESS_BOOL_ITEM_CHANGED(cat_config, USTEALTH_CONFIG_ID, gActivateUStealth);
-        PROCESS_BOOL_ITEM_CHANGED(cat_config, POWEROFFWARNING_CONFIG_ID, gSkip4SecondOffStatusCheck);
-        PROCESS_BOOL_ITEM_CHANGED(cat_config, FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID, gForceNDMSuspendSuccess);
-        PROCESS_BOOL_ITEM_CHANGED(cat_config, ALLOW_ERROR_NOTIFICATIONS, gAllowErrorNotifications);
+    WUPSStorageError storageError;
+    auto subItemConfig = WUPSStorageAPI::GetSubItem(CAT_CONFIG, storageError);
+    if (!subItemConfig) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to get sub item \"%s\": %s", CAT_CONFIG, WUPSStorageAPI::GetStatusStr(storageError).data());
+        return;
+    }
+    if (std::string_view(USTEALTH_CONFIG_ID) == item->identifier) {
+        gActivateUStealth = newValue;
+        storageError      = subItemConfig->Store(USTEALTH_CONFIG_ID, newValue);
+    } else if (std::string_view(POWEROFFWARNING_CONFIG_ID) == item->identifier) {
+        gSkip4SecondOffStatusCheck = newValue;
+        storageError               = subItemConfig->Store(POWEROFFWARNING_CONFIG_ID, newValue);
+    } else if (std::string_view(ALLOW_ERROR_NOTIFICATIONS) == item->identifier) {
+        gAllowErrorNotifications = newValue;
+        storageError             = subItemConfig->Store(ALLOW_ERROR_NOTIFICATIONS, newValue);
+    } else if (std::string_view(FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID) == item->identifier) {
+        gForceNDMSuspendSuccess = newValue;
+        storageError            = subItemConfig->Store(FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID, newValue);
     } else {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get sub item: %s", CAT_CONFIG);
+        return;
+    }
+    if (storageError != WUPS_STORAGE_ERROR_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to store %s. New value was %d", item->identifier, newValue);
     }
 }
 
-WUPS_GET_CONFIG() {
-    // We open the storage, so we can persist the configuration the user did.
-    if (WUPS_OpenStorage() != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE("Failed to open storage");
-        return 0;
+WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle rootHandle) {
+    try {
+        WUPSConfigCategory root = WUPSConfigCategory(rootHandle);
+
+        auto menuPatches = WUPSConfigCategory::Create("Wii U Menu patches");
+
+
+        menuPatches.add(WUPSConfigItemBoolean::Create(USTEALTH_CONFIG_ID,
+                                                      "Avoid \"Format\" dialog on Wii U Menu",
+                                                      ACTIVATE_USTEALTH_DEFAULT, gActivateUStealth,
+                                                      &boolItemChangedConfig));
+
+        menuPatches.add(WUPSConfigItemBoolean::Create(POWEROFFWARNING_CONFIG_ID,
+                                                      "Skip \"Shutdown warning\" on boot",
+                                                      SKIP_4_SECOND_OFF_STATUS_CHECK_DEFAULT, gSkip4SecondOffStatusCheck,
+                                                      &boolItemChangedConfig));
+
+        root.add(std::move(menuPatches));
+
+        auto otherPatches = WUPSConfigCategory::Create("Other patches");
+
+        otherPatches.add(WUPSConfigItemBoolean::Create(ALLOW_ERROR_NOTIFICATIONS,
+                                                       "Allow error notifications",
+                                                       ALLOW_ERROR_NOTIFICATIONS_DEFAULT, gAllowErrorNotifications,
+                                                       &boolItemChangedConfig));
+
+        otherPatches.add(WUPSConfigItemBoolean::Create(FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID,
+                                                       "Fix connecting to a 3DS in Mii Maker",
+                                                       FORCE_NDM_SUSPEND_SUCCESS_DEFAULT, gForceNDMSuspendSuccess,
+                                                       &boolItemChangedConfig));
+        root.add(std::move(otherPatches));
+
+    } catch (std::exception &e) {
+        OSReport("Exception T_T : %s\n", e.what());
+        return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
     }
-
-    WUPSConfigHandle config;
-    WUPSConfig_CreateHandled(&config, "Aroma Base Plugin");
-
-    WUPSConfigCategoryHandle cat;
-    WUPSConfig_AddCategoryByNameHandled(config, "Wii U Menu patches", &cat);
-    WUPSConfigCategoryHandle catOther;
-    WUPSConfig_AddCategoryByNameHandled(config, "Other patches", &catOther);
-
-    WUPSConfigItemBoolean_AddToCategoryHandled(config, cat, USTEALTH_CONFIG_ID, "Avoid \"Format\" dialog on Wii U Menu", gActivateUStealth, &boolItemChangedConfig);
-    WUPSConfigItemBoolean_AddToCategoryHandled(config, cat, POWEROFFWARNING_CONFIG_ID, "Skip \"Shutdown warning\" on boot", gSkip4SecondOffStatusCheck, &boolItemChangedConfig);
-
-    WUPSConfigItemBoolean_AddToCategoryHandled(config, catOther, ALLOW_ERROR_NOTIFICATIONS, "Allow error notifications", gAllowErrorNotifications, &boolItemChangedConfig);
-    WUPSConfigItemBoolean_AddToCategoryHandled(config, catOther, FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID, "Fix connecting to a 3DS in Mii Maker", gForceNDMSuspendSuccess, &boolItemChangedConfig);
-
-    return config;
-}
-
-WUPS_CONFIG_CLOSED() {
-    // Save all changes
-    if (WUPS_CloseStorage() != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to close storage");
-    }
+    return WUPSCONFIG_API_CALLBACK_RESULT_SUCCESS;
 }
