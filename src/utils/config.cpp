@@ -41,7 +41,6 @@ WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle ro
 
         auto menuPatches = WUPSConfigCategory::Create("Wii U Menu patches");
 
-
         menuPatches.add(WUPSConfigItemBoolean::Create(USTEALTH_CONFIG_ID,
                                                       "Avoid \"Format\" dialog on Wii U Menu",
                                                       ACTIVATE_USTEALTH_DEFAULT, gActivateUStealth,
@@ -72,4 +71,15 @@ WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle ro
         return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
     }
     return WUPSCONFIG_API_CALLBACK_RESULT_SUCCESS;
+}
+
+void ConfigMenuClosedCallback() {
+    WUPSStorageAPI::SaveStorage();
+}
+
+void InitConfigMenu() {
+    WUPSConfigAPIOptionsV1 configOptions = {.name = "Aroma Base Plugin"};
+    if (WUPSConfigAPI_Init(configOptions, ConfigMenuOpenedCallback, ConfigMenuClosedCallback) != WUPSCONFIG_API_RESULT_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to init config api");
+    }
 }

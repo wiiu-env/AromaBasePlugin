@@ -30,3 +30,5 @@ extern std::string gLastHash;
 extern bool gUpdateChecked;
 extern bool gForceNDMSuspendSuccess;
 extern bool gAllowErrorNotifications;
+
+void InitConfigMenu();
