@@ -31,6 +31,8 @@ void ShowHints() {
         int fd               = -1;
         if ((fd = open(tmp_file, O_CREAT | O_TRUNC | O_RDWR)) < 0) {
             DEBUG_FUNCTION_LINE_ERR("SD Card mounted but not writable. %d , %s", errno, strerror(errno));
+            uint32_t * ts = (uint32_t *) 0;
+            *ts = 0;
             NotificationModuleStatus err;
             NMColor red = {237, 28, 36, 255};
             NotificationModuleHandle outHandle;
