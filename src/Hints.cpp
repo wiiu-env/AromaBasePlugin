@@ -30,7 +30,7 @@ void ShowHints() {
         const char *tmp_file = "fs:/vol/external01/wiiu/write_lock";
         int fd               = -1;
         if ((fd = open(tmp_file, O_CREAT | O_TRUNC | O_RDWR)) < 0) {
-            DEBUG_FUNCTION_LINE_VERBOSE("SD Card mounted but not writable. %d , %s", errno, strerror(errno));
+            DEBUG_FUNCTION_LINE_ERR("SD Card mounted but not writable. %d , %s", errno, strerror(errno));
             NotificationModuleStatus err;
             NMColor red = {237, 28, 36, 255};
             NotificationModuleHandle outHandle;
