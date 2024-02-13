@@ -6,6 +6,7 @@
 #include <notifications/notifications.h>
 #include <sdutils/sdutils.h>
 #include <thread>
+#include <errno.h>
 
 std::unique_ptr<std::thread> sShowHintThread;
 static bool sShutdownHintThread = false;
@@ -29,7 +30,7 @@ void ShowHints() {
         const char *tmp_file = "fs:/vol/external01/wiiu/write_lock";
         int fd               = -1;
         if ((fd = open(tmp_file, O_CREAT | O_TRUNC | O_RDWR)) < 0) {
-            DEBUG_FUNCTION_LINE_VERBOSE("SD Card mounted but not writable");
+            DEBUG_FUNCTION_LINE_VERBOSE("SD Card mounted but not writable. %d , %s", errno, strerror(errno));
             NotificationModuleStatus err;
             NMColor red = {237, 28, 36, 255};
             NotificationModuleHandle outHandle;
