@@ -2,11 +2,11 @@
 #include "utils/config.h"
 #include <coreinit/cache.h>
 #include <coreinit/thread.h>
+#include <errno.h>
 #include <notifications/notification_defines.h>
 #include <notifications/notifications.h>
 #include <sdutils/sdutils.h>
 #include <thread>
-#include <errno.h>
 
 std::unique_ptr<std::thread> sShowHintThread;
 static bool sShutdownHintThread = false;
