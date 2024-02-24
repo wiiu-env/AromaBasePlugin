@@ -57,7 +57,7 @@ bool saveLatestUpdateHash(const std::string &hash) {
     }
 
     if (WUPSStorageAPI::SaveStorage() != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to save strorage");
+        DEBUG_FUNCTION_LINE_ERR("Failed to save storage");
         return false;
     }
 
@@ -88,17 +88,17 @@ void UpdateCheckThreadEntry() {
         AromaUpdater::LatestVersion data = nlohmann::json::parse(outBuffer);
         gUpdateChecked                   = true;
 
-        if (gLastHash == data.getHash()) {
+        if (gLastHash.empty()) { // don't show update warning on first boot
+            gLastHash = data.getHash();
+        } else if (gLastHash != data.getHash()) {
+            ShowUpdateNotification();
+        } else if (gLastHash == data.getHash()) {
             DEBUG_FUNCTION_LINE_VERBOSE("We don't need to update the hash");
             return;
         }
 
         // Update hash
         gLastHash = data.getHash();
-
-        if (!gLastHash.empty()) { // don't show update warning on first boot
-            ShowUpdateNotification();
-        }
 
         saveLatestUpdateHash(gLastHash);
     } catch (std::exception &e) {
