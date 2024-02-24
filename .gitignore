@@ -7,3 +7,4 @@ sysapp.cbp
 .idea/
 cmake-build-debug/
 CMakeLists.txt
+*.zip
