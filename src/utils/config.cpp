@@ -67,14 +67,17 @@ WUPSConfigAPICallbackStatus ConfigMenuOpenedCallback(WUPSConfigCategoryHandle ro
         root.add(std::move(otherPatches));
 
     } catch (std::exception &e) {
-        OSReport("Exception T_T : %s\n", e.what());
+        DEBUG_FUNCTION_LINE_ERR("Exception: %s\n", e.what());
         return WUPSCONFIG_API_CALLBACK_RESULT_ERROR;
     }
     return WUPSCONFIG_API_CALLBACK_RESULT_SUCCESS;
 }
 
 void ConfigMenuClosedCallback() {
-    WUPSStorageAPI::SaveStorage();
+    WUPSStorageError storageError;
+    if ((storageError = WUPSStorageAPI::SaveStorage()) != WUPS_STORAGE_ERROR_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to save storage: %d %s", storageError, WUPSStorageAPI_GetStatusStr(storageError));
+    }
 }
 
 void InitConfigMenu() {

@@ -23,50 +23,52 @@ WUPS_USE_WUT_DEVOPTAB();
 WUPS_USE_STORAGE("aroma_base_plugin"); // Unique id for the storage api
 
 bool InitConfigValuesFromStorage() {
+    bool result = true;
     WUPSStorageError storageError;
     auto subItemConfig = WUPSStorageAPI::GetOrCreateSubItem(CAT_CONFIG, storageError);
     if (!subItemConfig) {
         DEBUG_FUNCTION_LINE_ERR("Failed to get or create sub category \"%s\"", CAT_CONFIG);
-        return false;
-    }
-
-    if (subItemConfig->GetOrStoreDefault(USTEALTH_CONFIG_ID, gActivateUStealth, gActivateUStealth) != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", USTEALTH_CONFIG_ID);
-        return false;
-    }
-    if (subItemConfig->GetOrStoreDefault(POWEROFFWARNING_CONFIG_ID, gSkip4SecondOffStatusCheck, gSkip4SecondOffStatusCheck) != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", POWEROFFWARNING_CONFIG_ID);
-        return false;
-    }
-    if (subItemConfig->GetOrStoreDefault(FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID, gForceNDMSuspendSuccess, gForceNDMSuspendSuccess) != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID);
-        return false;
-    }
-    if (subItemConfig->GetOrStoreDefault(ALLOW_ERROR_NOTIFICATIONS, gAllowErrorNotifications, gAllowErrorNotifications) != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", ALLOW_ERROR_NOTIFICATIONS);
-        return false;
+        result = false;
+    } else {
+        if (subItemConfig->GetOrStoreDefault(USTEALTH_CONFIG_ID, gActivateUStealth, ACTIVATE_USTEALTH_DEFAULT) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", USTEALTH_CONFIG_ID);
+            result = false;
+        }
+        if (subItemConfig->GetOrStoreDefault(POWEROFFWARNING_CONFIG_ID, gSkip4SecondOffStatusCheck, SKIP_4_SECOND_OFF_STATUS_CHECK_DEFAULT) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", POWEROFFWARNING_CONFIG_ID);
+            result = false;
+        }
+        if (subItemConfig->GetOrStoreDefault(FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID, gForceNDMSuspendSuccess, FORCE_NDM_SUSPEND_SUCCESS_DEFAULT) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", FORCE_NDM_SUSPEND_SUCCESS_CONFIG_ID);
+            result = false;
+        }
+        if (subItemConfig->GetOrStoreDefault(ALLOW_ERROR_NOTIFICATIONS, gAllowErrorNotifications, ALLOW_ERROR_NOTIFICATIONS_DEFAULT) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", ALLOW_ERROR_NOTIFICATIONS);
+            result = false;
+        }
     }
 
     auto subItemOther = WUPSStorageAPI::GetOrCreateSubItem(CAT_OTHER, storageError);
     if (!subItemOther) {
         DEBUG_FUNCTION_LINE_ERR("Failed to get or create sub category \"%s\"", CAT_OTHER);
-        return false;
-    }
-
-    if (subItemOther->GetOrStoreDefault(CONFIG_MENU_HINT_SHOWN_ID, gConfigMenuHintShown, gConfigMenuHintShown) != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", CONFIG_MENU_HINT_SHOWN_ID);
-        return false;
-    }
-    if (subItemOther->GetOrStoreDefault(CONFIG_MENU_HINT_SHOWN_ID, gLastHash, gLastHash) != WUPS_STORAGE_ERROR_SUCCESS) {
-        DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\"", CONFIG_MENU_HINT_SHOWN_ID);
-        return false;
+        result = false;
+    } else {
+        if ((storageError = subItemOther->GetOrStoreDefault(CONFIG_MENU_HINT_SHOWN_ID, gConfigMenuHintShown, CONFIG_MENU_HINT_SHOWN_DEFAULT)) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\": %s", CONFIG_MENU_HINT_SHOWN_ID, WUPSStorageAPI_GetStatusStr(storageError));
+            result = false;
+        }
+        if ((storageError = subItemOther->GetOrStoreDefault(LAST_UPDATE_HASH_ID, gLastHash, LAST_UPDATE_HASH_DEFAULT)) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\": %s", LAST_UPDATE_HASH_ID, WUPSStorageAPI_GetStatusStr(storageError));
+            result = false;
+        }
     }
 
     if (WUPSStorageAPI::SaveStorage() != WUPS_STORAGE_ERROR_SUCCESS) {
         DEBUG_FUNCTION_LINE_ERR("Failed to save storage");
+        result = false;
     }
 
-    return true;
+    return result;
 }
 
 INITIALIZE_PLUGIN() {
