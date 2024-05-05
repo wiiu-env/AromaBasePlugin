@@ -16,6 +16,7 @@
 #include <vpad/input.h>
 #include <wups/function_patching.h>
 
+static std::string sAromaUpdaterPath               = AROMA_UPDATER_NEW_PATH_FULL;
 static NotificationModuleHandle sAromaUpdateHandle = 0;
 std::unique_ptr<std::thread> sCheckUpdateThread;
 static bool sShutdownUpdateThread = false;
@@ -109,17 +110,22 @@ void UpdateCheckThreadEntry() {
 void ShowUpdateNotification() {
     struct stat st {};
     // Check if the Aroma Updater is on the sd card
-    if (stat(AROMA_UPDATER_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
-        NotificationModuleStatus err;
-        if ((err = NotificationModule_AddDynamicNotification("A new Aroma Update is available. "
-                                                             "Hold \ue045 to launch the Aroma Updater, press \ue046 to hide this message",
-                                                             &sAromaUpdateHandle)) != NOTIFICATION_MODULE_RESULT_SUCCESS) {
-            DEBUG_FUNCTION_LINE_ERR("Failed to add update notification. %s", NotificationModule_GetStatusStr(err));
-            sAromaUpdateHandle = 0;
-        }
+    if (stat(AROMA_UPDATER_OLD_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+        sAromaUpdaterPath = AROMA_UPDATER_OLD_PATH;
+    } else if (stat(AROMA_UPDATER_NEW_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+        sAromaUpdaterPath = AROMA_UPDATER_NEW_PATH;
     } else {
         NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f);
         NotificationModule_AddInfoNotification("A new Aroma Update is available. Please launch the Aroma Updater!");
+        return;
+    }
+
+    NotificationModuleStatus err;
+    if ((err = NotificationModule_AddDynamicNotification("A new Aroma Update is available. "
+                                                         "Hold \ue045 to launch the Aroma Updater, press \ue046 to hide this message",
+                                                         &sAromaUpdateHandle)) != NOTIFICATION_MODULE_RESULT_SUCCESS) {
+        DEBUG_FUNCTION_LINE_ERR("Failed to add update notification. %s", NotificationModule_GetStatusStr(err));
+        sAromaUpdateHandle = 0;
     }
 }
 
@@ -136,15 +142,16 @@ bool CheckForButtonCombo(uint32_t trigger, uint32_t hold, uint32_t &holdForXFram
     }
     if (hold == LAUNCH_AROMA_UPDATER_VPAD_COMBO) {
         if (++holdForXFrames > holdForFramesTarget) {
+            NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.5f);
+            sAromaUpdateHandle = 0;
             RPXLoaderStatus err;
-            if ((err = RPXLoader_LaunchHomebrew(AROMA_UPDATER_PATH)) == RPX_LOADER_RESULT_SUCCESS) {
-                NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 2.0f);
-                sAromaUpdateHandle = 0;
-                updaterLaunched    = true;
-                return true;
+            if ((err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.c_str())) == RPX_LOADER_RESULT_SUCCESS) {
+                updaterLaunched = true;
             } else {
                 DEBUG_FUNCTION_LINE_ERR("RPXLoader_LaunchHomebrew failed: %s", RPXLoader_GetStatusStr(err));
+                NotificationModule_AddErrorNotification("Failed to launch Aroma Updater");
             }
+            return true;
         }
     } else {
         holdForXFrames = 0;

@@ -1,6 +1,7 @@
 #include "main.h"
 #include "Hints.h"
 #include "UpdaterCheck.h"
+#include "common.h"
 #include "utils/DownloadUtils.h"
 #include "utils/LatestVersion.h"
 #include "utils/config.h"
@@ -71,6 +72,45 @@ bool InitConfigValuesFromStorage() {
     return result;
 }
 
+/*
+ * Migrates wiiu/apps/AromaUpdater.wuhb to wiiu/apps/AromaUpdater/AromaUpdater.wuhb
+ */
+void MigrateAromaUpdater() {
+    struct stat st {};
+    bool oldExists = false;
+    bool newExists = false;
+    if (stat(AROMA_UPDATER_NEW_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+        DEBUG_FUNCTION_LINE_VERBOSE("\"%s\" exists", AROMA_UPDATER_NEW_PATH_FULL);
+        newExists = true;
+    }
+    st = {};
+    if (stat(AROMA_UPDATER_OLD_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+        DEBUG_FUNCTION_LINE_VERBOSE("\"%s\" exists", AROMA_UPDATER_OLD_PATH_FULL);
+        oldExists = true;
+    }
+    if (newExists) {
+        if (oldExists) {
+            if (remove(AROMA_UPDATER_OLD_PATH_FULL) < 0) {
+                DEBUG_FUNCTION_LINE_WARN("Failed to remove old Aroma Updater: %d", errno);
+            }
+        } else {
+            DEBUG_FUNCTION_LINE_VERBOSE("Only new AromaUpdater.wuhb exists");
+        }
+        return;
+    } else if (oldExists) {
+        if (stat(AROMA_UPDATER_NEW_DIRECTORY_FULL, &st) < 0 || !S_ISDIR(st.st_mode)) {
+            if (mkdir(AROMA_UPDATER_NEW_DIRECTORY_FULL, 0777) < 0) {
+                DEBUG_FUNCTION_LINE_WARN("Failed to create: \"%s\"", AROMA_UPDATER_NEW_DIRECTORY_FULL);
+            }
+        }
+        if (rename(AROMA_UPDATER_OLD_PATH_FULL, AROMA_UPDATER_NEW_PATH_FULL) < 0) {
+            DEBUG_FUNCTION_LINE_WARN("Failed to move Aroma Updater to new path");
+        }
+    } else {
+        DEBUG_FUNCTION_LINE_VERBOSE("No AromaUpdater.wuhb exists");
+    }
+}
+
 INITIALIZE_PLUGIN() {
     initLogging();
     if (NotificationModule_InitLibrary() != NOTIFICATION_MODULE_RESULT_SUCCESS) {
@@ -86,6 +126,8 @@ INITIALIZE_PLUGIN() {
     InitConfigValuesFromStorage();
 
     InitConfigMenu();
+
+    MigrateAromaUpdater();
 }
 
 ON_APPLICATION_START() {
