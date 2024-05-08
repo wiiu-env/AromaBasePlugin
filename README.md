@@ -36,6 +36,7 @@ For building you need:
 - [librpxloader](https://github.com/wiiu-env/librpxloader)
 - [libcurlwrapper](https://github.com/wiiu-env/libcurlwrapper)
 - [libsdutils](https://github.com/wiiu-env/libsdutils)
+- [libmocha](https://github.com/wiiu-env/libmocha)
 
 ## Building using the Dockerfile
 
