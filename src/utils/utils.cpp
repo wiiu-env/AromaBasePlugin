@@ -75,7 +75,7 @@ void Utils::DumpOTPAndSeeprom() {
         return;
     }
     std::string backupPathConsole            = string_format(BACKUPS_DIRECTORY_FULL "/%s", serialId.c_str());
-    std::string backupPathConsoleOtpPath     = backupPathConsole + "/opt.bin";
+    std::string backupPathConsoleOtpPath     = backupPathConsole + "/otp.bin";
     std::string backupPathConsoleSeepromPath = backupPathConsole + "/seeprom.bin";
 
     if (!FSUtils::CreateSubfolder(backupPathConsole.c_str())) {
@@ -83,7 +83,7 @@ void Utils::DumpOTPAndSeeprom() {
     }
 
     bool seepromExists = FSUtils::CheckFile(backupPathConsoleSeepromPath.c_str());
-    bool optExists     = FSUtils::CheckFile(backupPathConsoleOtpPath.c_str());
+    bool otpExists     = FSUtils::CheckFile(backupPathConsoleOtpPath.c_str());
 
     if (!seepromExists) {
         uint8_t data[0x200] = {};
@@ -99,7 +99,7 @@ void Utils::DumpOTPAndSeeprom() {
     } else {
         DEBUG_FUNCTION_LINE_VERBOSE("SEEPROM backup already exists");
     }
-    if (!optExists) {
+    if (!otpExists) {
         WiiUConsoleOTP otp = {};
         if (Mocha_ReadOTP(&otp) != MOCHA_RESULT_SUCCESS) {
             DEBUG_FUNCTION_LINE_WARN("Failed to read otp");
@@ -112,5 +112,11 @@ void Utils::DumpOTPAndSeeprom() {
         }
     } else {
         DEBUG_FUNCTION_LINE_VERBOSE("OTP backup already exists");
+    }
+
+    // Remove wrong file with typo
+    std::string backupPathConsoleOTPPathTypo = backupPathConsole + "/opt.bin";
+    if (FSUtils::CheckFile(backupPathConsoleOTPPathTypo.c_str())) {
+        remove(backupPathConsoleOTPPathTypo.c_str());
     }
 }
