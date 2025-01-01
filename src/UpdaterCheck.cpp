@@ -13,8 +13,10 @@
 #include <string>
 #include <sys/stat.h>
 #include <thread>
+#include <utils/logger.h>
 #include <vpad/input.h>
 #include <wups/function_patching.h>
+#include <wups/storage.h>
 
 static std::string sAromaUpdaterPath               = AROMA_UPDATER_NEW_PATH_FULL;
 static NotificationModuleHandle sAromaUpdateHandle = 0;
@@ -108,7 +110,7 @@ void UpdateCheckThreadEntry() {
 }
 
 void ShowUpdateNotification() {
-    struct stat st {};
+    struct stat st{};
     // Check if the Aroma Updater is on the sd card
     if (stat(AROMA_UPDATER_OLD_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
         sAromaUpdaterPath = AROMA_UPDATER_OLD_PATH;
@@ -128,8 +130,6 @@ void ShowUpdateNotification() {
         sAromaUpdateHandle = 0;
     }
 }
-
-extern "C" uint32_t VPADGetButtonProcMode(uint32_t);
 
 static bool updaterLaunched     = false;
 static uint32_t sHoldForXFrames = 0;
@@ -190,14 +190,14 @@ DECL_FUNCTION(int32_t, VPADRead, VPADChan chan,
 static uint32_t sWPADLastButtonHold[4] = {0, 0, 0, 0};
 static uint32_t sHoldForXFramesWPAD[4] = {0, 0, 0, 0};
 
-DECL_FUNCTION(void, WPADRead, WPADChan chan, WPADStatusProController *data) {
+DECL_FUNCTION(void, WPADRead, WPADChan chan, WPADStatus *data) {
     real_WPADRead(chan, data);
     if (!sAromaUpdateHandle) {
         return;
     }
 
     if (data && !updaterLaunched && chan >= 0 && chan < 4) {
-        if (data[0].err == 0) {
+        if (data[0].error == 0) {
             if (data[0].extensionType != 0xFF) {
                 uint32_t curButtonHold = 0;
                 if (data[0].extensionType == WPAD_EXT_CORE || data[0].extensionType == WPAD_EXT_NUNCHUK) {
