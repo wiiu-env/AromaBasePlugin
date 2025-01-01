@@ -1,8 +1,9 @@
 #pragma once
 
-#include <cstdint>
 #include <memory>
 #include <string>
+
+#include <cstdio>
 
 namespace Utils {
     bool GetSerialId(std::string &serialID);

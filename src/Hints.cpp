@@ -1,13 +1,21 @@
 #include "Hints.h"
+
 #include "utils/config.h"
-#include <coreinit/cache.h>
-#include <coreinit/thread.h>
+#include "utils/logger.h"
+
 #include <notifications/notification_defines.h>
 #include <notifications/notifications.h>
 #include <sdutils/sdutils.h>
+
+#include <wups/storage.h>
+
+#include <coreinit/cache.h>
+#include <coreinit/thread.h>
+
+#include <thread>
+
 #include <sys/fcntl.h>
 #include <sys/unistd.h>
-#include <thread>
 
 std::unique_ptr<std::thread> sShowHintThread;
 static bool sShutdownHintThread = false;

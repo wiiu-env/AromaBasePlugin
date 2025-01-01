@@ -1,5 +1,11 @@
 #include "config.h"
 
+#include "logger.h"
+
+#include <wups/config/WUPSConfigCategory.h>
+#include <wups/config/WUPSConfigItemBoolean.h>
+#include <wups/storage.h>
+
 bool gActivateUStealth          = ACTIVATE_USTEALTH_DEFAULT;
 bool gSkip4SecondOffStatusCheck = SKIP_4_SECOND_OFF_STATUS_CHECK_DEFAULT;
 bool gConfigMenuHintShown       = CONFIG_MENU_HINT_SHOWN_DEFAULT;
