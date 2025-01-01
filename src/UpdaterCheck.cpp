@@ -1,21 +1,20 @@
+#include "UpdaterCheck.h"
 #include "common.h"
 #include "utils/DownloadUtils.h"
 #include "utils/LatestVersion.h"
 #include "utils/config.h"
-#include "utils/input.h"
 #include "utils/logger.h"
 
 #include <notifications/notifications.h>
 #include <rpxloader/rpxloader.h>
 
-#include <wups/function_patching.h>
+#include <wups/button_combo/api.h>
+#include <wups/button_combo/defines.h>
 #include <wups/storage.h>
 
 #include <coreinit/cache.h>
 #include <coreinit/thread.h>
 #include <coreinit/time.h>
-#include <padscore/wpad.h>
-#include <vpad/input.h>
 
 #include <memory>
 #include <string>
@@ -25,32 +24,38 @@
 
 static std::string sAromaUpdaterPath               = AROMA_UPDATER_NEW_PATH_FULL;
 static NotificationModuleHandle sAromaUpdateHandle = 0;
-std::unique_ptr<std::thread> sCheckUpdateThread;
-static bool sShutdownUpdateThread = false;
+std::unique_ptr<std::jthread> sCheckUpdateThread;
 void UpdateCheckThreadEntry();
 
 void ShowUpdateNotification();
-constexpr uint32_t HIDE_UPDATE_WARNING_VPAD_COMBO  = VPAD_BUTTON_MINUS;
-constexpr uint32_t LAUNCH_AROMA_UPDATER_VPAD_COMBO = VPAD_BUTTON_PLUS;
-constexpr uint32_t sHoldForFramesTarget            = 60;
+constexpr WUPSButtonCombo_Buttons HIDE_UPDATE_WARNING_VPAD_COMBO  = WUPS_BUTTON_COMBO_BUTTON_MINUS;
+constexpr WUPSButtonCombo_Buttons LAUNCH_AROMA_UPDATER_VPAD_COMBO = WUPS_BUTTON_COMBO_BUTTON_PLUS;
+constexpr uint32_t HOLD_COMBO_DURATION_IN_MS                      = 1000;
+
+static std::forward_list<WUPSButtonComboAPI::ButtonCombo> sButtonComboHandles;
 
 void StartUpdaterCheckThread() {
     if (!gUpdateChecked && DownloadUtils::Init()) {
-        sShutdownUpdateThread = false;
-        sCheckUpdateThread    = std::make_unique<std::thread>(UpdateCheckThreadEntry);
+        sCheckUpdateThread = std::make_unique<std::jthread>(UpdateCheckThreadEntry);
     } else {
         sCheckUpdateThread.reset();
     }
 }
 
+void RemoveButtonComboHandles(NotificationModuleHandle, void *) {
+    sButtonComboHandles.clear();
+}
+
 void StopUpdaterCheckThread() {
     if (sCheckUpdateThread != nullptr) {
-        sShutdownUpdateThread = true;
+        sCheckUpdateThread->request_stop();
         OSMemoryBarrier();
         sCheckUpdateThread->join();
         sCheckUpdateThread.reset();
     }
+    RemoveButtonComboHandles(0, nullptr);
 }
+
 
 bool saveLatestUpdateHash(const std::string &hash) {
     WUPSStorageError err;
@@ -74,11 +79,11 @@ bool saveLatestUpdateHash(const std::string &hash) {
 
 void UpdateCheckThreadEntry() {
     bool isOverlayReady = false;
-    while (!sShutdownUpdateThread &&
+    while (!sCheckUpdateThread->get_stop_token().stop_requested() &&
            NotificationModule_IsOverlayReady(&isOverlayReady) == NOTIFICATION_MODULE_RESULT_SUCCESS && !isOverlayReady) {
         OSSleepTicks(OSMillisecondsToTicks(16));
     }
-    if (sShutdownUpdateThread || !isOverlayReady) {
+    if (sCheckUpdateThread->get_stop_token().stop_requested() || !isOverlayReady) {
         return;
     }
 
@@ -93,8 +98,8 @@ void UpdateCheckThreadEntry() {
         return;
     }
     try {
-        AromaUpdater::LatestVersion data = nlohmann::json::parse(outBuffer);
-        gUpdateChecked                   = true;
+        const AromaUpdater::LatestVersion data = nlohmann::json::parse(outBuffer);
+        gUpdateChecked                         = true;
 
         if (gLastHash.empty()) { // don't show update warning on first boot
             gLastHash = data.getHash();
@@ -114,118 +119,81 @@ void UpdateCheckThreadEntry() {
     }
 }
 
+static bool sUpdaterLaunched = false;
+
+void HandleCancelNotification(WUPSButtonCombo_ControllerTypes, WUPSButtonCombo_ComboHandle, void *) {
+    if (!sAromaUpdateHandle || sUpdaterLaunched) {
+        return;
+    }
+    NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.0f);
+    sAromaUpdateHandle = 0;
+}
+
+void HandleOpenAromaUpdater(WUPSButtonCombo_ControllerTypes, WUPSButtonCombo_ComboHandle, void *) {
+    if (!sAromaUpdateHandle || sUpdaterLaunched) {
+        return;
+    }
+    NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.5f);
+    sAromaUpdateHandle = 0;
+    if (const RPXLoaderStatus err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.c_str()); err == RPX_LOADER_RESULT_SUCCESS) {
+        sUpdaterLaunched = true;
+    } else {
+        DEBUG_FUNCTION_LINE_ERR("RPXLoader_LaunchHomebrew failed: %s", RPXLoader_GetStatusStr(err));
+        NotificationModule_AddErrorNotification("Failed to launch Aroma Updater");
+    }
+}
+
 void ShowUpdateNotification() {
+    bool buttonCombosValid = true;
+    WUPSButtonCombo_Error comboErr;
+    WUPSButtonCombo_ComboStatus status;
+
+    if (auto comboOpt = WUPSButtonComboAPI::CreateComboHoldObserver("AromaBasePlugin: Launch Aroma Updater Combo",
+                                                                    LAUNCH_AROMA_UPDATER_VPAD_COMBO,
+                                                                    HOLD_COMBO_DURATION_IN_MS,
+                                                                    HandleOpenAromaUpdater,
+                                                                    nullptr,
+                                                                    status,
+                                                                    comboErr);
+        comboOpt && comboErr == WUPS_BUTTON_COMBO_ERROR_SUCCESS && status == WUPS_BUTTON_COMBO_COMBO_STATUS_VALID) {
+        sButtonComboHandles.push_front(std::move(*comboOpt));
+    } else {
+        buttonCombosValid = false;
+    }
+
+    if (auto comboOpt = WUPSButtonComboAPI::CreateComboPressDownObserver("AromaBasePlugin: Cancel Aroma Updater Notification",
+                                                                         HIDE_UPDATE_WARNING_VPAD_COMBO,
+                                                                         HandleCancelNotification,
+                                                                         nullptr,
+                                                                         status,
+                                                                         comboErr);
+        comboOpt && comboErr == WUPS_BUTTON_COMBO_ERROR_SUCCESS && status == WUPS_BUTTON_COMBO_COMBO_STATUS_VALID) {
+        sButtonComboHandles.push_front(std::move(*comboOpt));
+    } else {
+        buttonCombosValid = false;
+    }
+
     struct stat st {};
     // Check if the Aroma Updater is on the sd card
-    if (stat(AROMA_UPDATER_OLD_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+    if (buttonCombosValid && stat(AROMA_UPDATER_OLD_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
         sAromaUpdaterPath = AROMA_UPDATER_OLD_PATH;
-    } else if (stat(AROMA_UPDATER_NEW_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
+    } else if (buttonCombosValid && stat(AROMA_UPDATER_NEW_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
         sAromaUpdaterPath = AROMA_UPDATER_NEW_PATH;
     } else {
+        RemoveButtonComboHandles(0, nullptr);
         NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f);
         NotificationModule_AddInfoNotification("A new Aroma Update is available. Please launch the Aroma Updater!");
         return;
     }
 
-    NotificationModuleStatus err;
-    if ((err = NotificationModule_AddDynamicNotification("A new Aroma Update is available. "
-                                                         "Hold \ue045 to launch the Aroma Updater, press \ue046 to hide this message",
-                                                         &sAromaUpdateHandle)) != NOTIFICATION_MODULE_RESULT_SUCCESS) {
+    if (const NotificationModuleStatus err =
+                NotificationModule_AddDynamicNotificationWithCallback("A new Aroma Update is available. "
+                                                                      "Hold \ue045 to launch the Aroma Updater, press \ue046 to hide this message",
+                                                                      &sAromaUpdateHandle,
+                                                                      RemoveButtonComboHandles,
+                                                                      nullptr);
+        err != NOTIFICATION_MODULE_RESULT_SUCCESS) {
         DEBUG_FUNCTION_LINE_ERR("Failed to add update notification. %s", NotificationModule_GetStatusStr(err));
         sAromaUpdateHandle = 0;
     }
 }
-
-static bool updaterLaunched     = false;
-static uint32_t sHoldForXFrames = 0;
-
-bool CheckForButtonCombo(uint32_t trigger, uint32_t hold, uint32_t &holdForXFrames, uint32_t holdForFramesTarget) {
-    if (trigger == HIDE_UPDATE_WARNING_VPAD_COMBO) {
-        NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.0f);
-        sAromaUpdateHandle = 0;
-        return true;
-    }
-    if (hold == LAUNCH_AROMA_UPDATER_VPAD_COMBO) {
-        if (++holdForXFrames > holdForFramesTarget) {
-            NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.5f);
-            sAromaUpdateHandle = 0;
-            RPXLoaderStatus err;
-            if ((err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.c_str())) == RPX_LOADER_RESULT_SUCCESS) {
-                updaterLaunched = true;
-            } else {
-                DEBUG_FUNCTION_LINE_ERR("RPXLoader_LaunchHomebrew failed: %s", RPXLoader_GetStatusStr(err));
-                NotificationModule_AddErrorNotification("Failed to launch Aroma Updater");
-            }
-            return true;
-        }
-    } else {
-        holdForXFrames = 0;
-    }
-    return false;
-}
-
-DECL_FUNCTION(int32_t, VPADRead, VPADChan chan,
-              VPADStatus *buffers,
-              uint32_t count,
-              VPADReadError *outError) {
-    if (!sAromaUpdateHandle) {
-        return real_VPADRead(chan, buffers, count, outError);
-    }
-    VPADReadError real_error;
-    auto result = real_VPADRead(chan, buffers, count, &real_error);
-
-    if (!updaterLaunched && result > 0 && real_error == VPAD_READ_SUCCESS) {
-        uint32_t end = 1;
-        // Fix games like TP HD
-        if (VPADGetButtonProcMode(chan) == 1) {
-            end = result;
-        }
-        for (uint32_t i = 0; i < end; i++) {
-            if (CheckForButtonCombo((buffers[i].trigger & 0x000FFFFF), (buffers[i].hold & 0x000FFFFF), sHoldForXFrames, sHoldForFramesTarget)) {
-                break;
-            }
-        }
-    }
-    if (outError) {
-        *outError = real_error;
-    }
-    return result;
-}
-
-static uint32_t sWPADLastButtonHold[4] = {0, 0, 0, 0};
-static uint32_t sHoldForXFramesWPAD[4] = {0, 0, 0, 0};
-
-DECL_FUNCTION(void, WPADRead, WPADChan chan, WPADStatus *data) {
-    real_WPADRead(chan, data);
-    if (!sAromaUpdateHandle) {
-        return;
-    }
-
-    if (data && !updaterLaunched && chan >= 0 && chan < 4) {
-        if (data[0].error == 0) {
-            if (data[0].extensionType != 0xFF) {
-                uint32_t curButtonHold = 0;
-                if (data[0].extensionType == WPAD_EXT_CORE || data[0].extensionType == WPAD_EXT_NUNCHUK) {
-                    // button data is in the first 2 bytes for wiimotes
-                    curButtonHold = remapWiiMoteButtons(((uint16_t *) data)[0]);
-                } else if (data[0].extensionType == WPAD_EXT_CLASSIC) {
-                    curButtonHold = remapClassicButtons(((uint32_t *) data)[10] & 0xFFFF);
-                } else if (data[0].extensionType == WPAD_EXT_PRO_CONTROLLER) {
-                    curButtonHold = remapProButtons(data[0].buttons);
-                }
-
-                uint32_t curButtonTrigger = (curButtonHold & (~(sWPADLastButtonHold[chan])));
-
-                if (CheckForButtonCombo(curButtonTrigger, curButtonHold, sHoldForXFramesWPAD[chan], sHoldForFramesTarget * 2)) {
-                    return;
-                }
-
-                sWPADLastButtonHold[chan] = curButtonHold;
-            }
-        }
-    }
-}
-
-// We only want to patch Wii U Menu
-WUPS_MUST_REPLACE_FOR_PROCESS(VPADRead, WUPS_LOADER_LIBRARY_VPAD, VPADRead, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
-WUPS_MUST_REPLACE_FOR_PROCESS(WPADRead, WUPS_LOADER_LIBRARY_PADSCORE, WPADRead, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
