@@ -2,9 +2,13 @@
 #include "FSUtils.h"
 #include "common.h"
 #include "logger.h"
-#include <coreinit/mcp.h>
+
 #include <mocha/mocha.h>
+
+#include <coreinit/mcp.h>
+
 #include <string>
+
 #include <sys/stat.h>
 
 bool Utils::GetSerialId(std::string &serialID) {

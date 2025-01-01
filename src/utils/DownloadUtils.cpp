@@ -1,7 +1,9 @@
 #include "DownloadUtils.h"
 #include "logger.h"
-#include <coreinit/cache.h>
+
 #include <curl/curl.h>
+
+#include <coreinit/cache.h>
 
 #define IO_BUFSIZE (128 * 1024) // 128 KB
 

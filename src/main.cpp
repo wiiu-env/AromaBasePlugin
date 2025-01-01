@@ -5,15 +5,19 @@
 #include "utils/LatestVersion.h"
 #include "utils/config.h"
 #include "utils/utils.h"
-#include <coreinit/title.h>
-#include <malloc.h>
+#include <utils/logger.h>
+
 #include <mocha/mocha.h>
-#include <nn/spm.h>
 #include <notifications/notifications.h>
 #include <rpxloader/rpxloader.h>
 #include <sdutils/sdutils.h>
-#include <utils/logger.h>
+
 #include <wups.h>
+
+#include <coreinit/title.h>
+#include <nn/spm.h>
+
+#include <malloc.h>
 
 WUPS_PLUGIN_NAME("Aroma Base Plugin");
 WUPS_PLUGIN_DESCRIPTION("Implements small patches and checks for Aroma updates.");

@@ -1,8 +1,8 @@
 #pragma once
-#include "logger.h"
+
 #include <string>
-#include <wups/config/WUPSConfigItemBoolean.h>
-#include <wups/storage.h>
+
+#include <cstdint>
 
 #define CAT_CONFIG                             "config"
 #define CAT_OTHER                              "other"

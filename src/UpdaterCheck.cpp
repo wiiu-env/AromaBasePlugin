@@ -3,20 +3,25 @@
 #include "utils/LatestVersion.h"
 #include "utils/config.h"
 #include "utils/input.h"
+#include "utils/logger.h"
+
+#include <notifications/notifications.h>
+#include <rpxloader/rpxloader.h>
+
+#include <wups/function_patching.h>
+#include <wups/storage.h>
+
 #include <coreinit/cache.h>
 #include <coreinit/thread.h>
 #include <coreinit/time.h>
-#include <memory>
-#include <notifications/notifications.h>
 #include <padscore/wpad.h>
-#include <rpxloader/rpxloader.h>
-#include <string>
-#include <sys/stat.h>
-#include <thread>
-#include <utils/logger.h>
 #include <vpad/input.h>
-#include <wups/function_patching.h>
-#include <wups/storage.h>
+
+#include <memory>
+#include <string>
+#include <thread>
+
+#include <sys/stat.h>
 
 static std::string sAromaUpdaterPath               = AROMA_UPDATER_NEW_PATH_FULL;
 static NotificationModuleHandle sAromaUpdateHandle = 0;
@@ -110,7 +115,7 @@ void UpdateCheckThreadEntry() {
 }
 
 void ShowUpdateNotification() {
-    struct stat st{};
+    struct stat st {};
     // Check if the Aroma Updater is on the sd card
     if (stat(AROMA_UPDATER_OLD_PATH_FULL, &st) >= 0 && S_ISREG(st.st_mode)) {
         sAromaUpdaterPath = AROMA_UPDATER_OLD_PATH;
