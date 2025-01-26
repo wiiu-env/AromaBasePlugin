@@ -158,6 +158,7 @@ void ShowUpdateNotification() {
         comboOpt && comboErr == WUPS_BUTTON_COMBO_ERROR_SUCCESS && status == WUPS_BUTTON_COMBO_COMBO_STATUS_VALID) {
         sButtonComboHandles.push_front(std::move(*comboOpt));
     } else {
+        DEBUG_FUNCTION_LINE_WARN("Failed to create launch aroma updater combo: %s", WUPSButtonComboAPI_GetStatusStr(comboErr));
         buttonCombosValid = false;
     }
 
@@ -170,6 +171,7 @@ void ShowUpdateNotification() {
         comboOpt && comboErr == WUPS_BUTTON_COMBO_ERROR_SUCCESS && status == WUPS_BUTTON_COMBO_COMBO_STATUS_VALID) {
         sButtonComboHandles.push_front(std::move(*comboOpt));
     } else {
+        DEBUG_FUNCTION_LINE_WARN("Failed to create cancel aroma updater notification combo: %s", WUPSButtonComboAPI_GetStatusStr(comboErr));
         buttonCombosValid = false;
     }
 
