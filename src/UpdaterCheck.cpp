@@ -49,9 +49,7 @@ void RemoveButtonComboHandles(NotificationModuleHandle, void *) {
 }
 
 void StopUpdaterCheckThread() {
-    if (sCheckUpdateThread) {
-        sCheckUpdateThread.reset();
-    }
+    sCheckUpdateThread.reset();
     RemoveButtonComboHandles(0, nullptr);
 }
 
