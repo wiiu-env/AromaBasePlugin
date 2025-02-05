@@ -16,16 +16,18 @@
 #include <coreinit/thread.h>
 #include <coreinit/time.h>
 
-#include <memory>
+#include <optional>
 #include <string>
 #include <thread>
 
 #include <sys/stat.h>
 
+using namespace std::literals;
+
 static std::string sAromaUpdaterPath               = AROMA_UPDATER_NEW_PATH_FULL;
 static NotificationModuleHandle sAromaUpdateHandle = 0;
-std::unique_ptr<std::jthread> sCheckUpdateThread;
-void UpdateCheckThreadEntry();
+std::optional<std::jthread> sCheckUpdateThread;
+void UpdateCheckThreadEntry(std::stop_token token);
 
 void ShowUpdateNotification();
 constexpr WUPSButtonCombo_Buttons HIDE_UPDATE_WARNING_VPAD_COMBO  = WUPS_BUTTON_COMBO_BUTTON_MINUS;
@@ -36,7 +38,7 @@ static std::forward_list<WUPSButtonComboAPI::ButtonCombo> sButtonComboHandles;
 
 void StartUpdaterCheckThread() {
     if (!gUpdateChecked && DownloadUtils::Init()) {
-        sCheckUpdateThread = std::make_unique<std::jthread>(UpdateCheckThreadEntry);
+        sCheckUpdateThread.emplace(UpdateCheckThreadEntry);
     } else {
         sCheckUpdateThread.reset();
     }
@@ -47,10 +49,7 @@ void RemoveButtonComboHandles(NotificationModuleHandle, void *) {
 }
 
 void StopUpdaterCheckThread() {
-    if (sCheckUpdateThread != nullptr) {
-        sCheckUpdateThread->request_stop();
-        OSMemoryBarrier();
-        sCheckUpdateThread->join();
+    if (sCheckUpdateThread) {
         sCheckUpdateThread.reset();
     }
     RemoveButtonComboHandles(0, nullptr);
@@ -77,13 +76,13 @@ bool saveLatestUpdateHash(const std::string &hash) {
     return true;
 }
 
-void UpdateCheckThreadEntry() {
+void UpdateCheckThreadEntry(std::stop_token token) {
     bool isOverlayReady = false;
-    while (!sCheckUpdateThread->get_stop_token().stop_requested() &&
+    while (!token.stop_requested() &&
            NotificationModule_IsOverlayReady(&isOverlayReady) == NOTIFICATION_MODULE_RESULT_SUCCESS && !isOverlayReady) {
-        OSSleepTicks(OSMillisecondsToTicks(16));
+        std::this_thread::sleep_for(16ms);
     }
-    if (sCheckUpdateThread->get_stop_token().stop_requested() || !isOverlayReady) {
+    if (token.stop_requested() || !isOverlayReady) {
         return;
     }
 
@@ -135,7 +134,7 @@ void HandleOpenAromaUpdater(WUPSButtonCombo_ControllerTypes, WUPSButtonCombo_Com
     }
     NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.5f);
     sAromaUpdateHandle = 0;
-    if (const RPXLoaderStatus err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.c_str()); err == RPX_LOADER_RESULT_SUCCESS) {
+    if (const RPXLoaderStatus err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.data()); err == RPX_LOADER_RESULT_SUCCESS) {
         sUpdaterLaunched = true;
     } else {
         DEBUG_FUNCTION_LINE_ERR("RPXLoader_LaunchHomebrew failed: %s", RPXLoader_GetStatusStr(err));
