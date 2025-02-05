@@ -132,7 +132,7 @@ void HandleOpenAromaUpdater(WUPSButtonCombo_ControllerTypes, WUPSButtonCombo_Com
     }
     NotificationModule_FinishDynamicNotification(sAromaUpdateHandle, 0.5f);
     sAromaUpdateHandle = 0;
-    if (const RPXLoaderStatus err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.data()); err == RPX_LOADER_RESULT_SUCCESS) {
+    if (const RPXLoaderStatus err = RPXLoader_LaunchHomebrew(sAromaUpdaterPath.c_str()); err == RPX_LOADER_RESULT_SUCCESS) {
         sUpdaterLaunched = true;
     } else {
         DEBUG_FUNCTION_LINE_ERR("RPXLoader_LaunchHomebrew failed: %s", RPXLoader_GetStatusStr(err));
