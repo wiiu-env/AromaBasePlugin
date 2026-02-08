@@ -52,6 +52,18 @@ bool InitConfigValuesFromStorage() {
             DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\": %s", ALLOW_ERROR_NOTIFICATIONS, WUPSStorageAPI_GetStatusStr(storageError));
             result = false;
         }
+        if ((storageError = subItemConfig->GetOrStoreDefault(TCP_LOGGING_ENABLED_ID, gTCPLoggingEnabled, TCP_LOGGING_ENABLED_DEFAULT)) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\": %s", TCP_LOGGING_ENABLED_ID, WUPSStorageAPI_GetStatusStr(storageError));
+            result = false;
+        }
+        if ((storageError = subItemConfig->GetOrStoreDefault(TCP_LOGGING_IP_FILTER_ACTIVE_ID, gTCPLoggingIPFilterActive, TCP_LOGGING_IP_FILTER_ACTIVE_DEFAULT)) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\": %s", TCP_LOGGING_IP_FILTER_ACTIVE_ID, WUPSStorageAPI_GetStatusStr(storageError));
+            result = false;
+        }
+        if ((storageError = subItemConfig->GetOrStoreDefault(TCP_LOGGING_IP_ID, gTCPLoggingIP, TCP_LOGGING_IP_DEFAULT)) != WUPS_STORAGE_ERROR_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Failed to get or create item \"%s\": %s", TCP_LOGGING_IP_ID, WUPSStorageAPI_GetStatusStr(storageError));
+            result = false;
+        }
     }
 
     auto subItemOther = WUPSStorageAPI::GetOrCreateSubItem(CAT_OTHER, storageError);
@@ -101,6 +113,17 @@ INITIALIZE_PLUGIN() {
     Utils::MigrateAromaUpdater();
 
     Utils::DumpOTPAndSeeprom();
+
+    uint32_t mochaAPIVersion = 0;
+    if (Mocha_CheckAPIVersion(&mochaAPIVersion) == MOCHA_RESULT_SUCCESS) {
+        gLibMochaAPIVersion = static_cast<int32_t>(mochaAPIVersion);
+    }
+
+    if (gTCPLoggingEnabled && gLibMochaAPIVersion >= 2) {
+        if (const auto res = Mocha_StartTCPSyslogLogging(gTCPLoggingIPFilterActive, gTCPLoggingIPFilterActive ? gTCPLoggingIP : 0); res != MOCHA_RESULT_SUCCESS) {
+            DEBUG_FUNCTION_LINE_ERR("Mocha_StartTCPSyslogLogging failed:%s (%d)", Mocha_GetStatusStr(res), res);
+        }
+    }
 }
 
 ON_APPLICATION_START() {
@@ -126,6 +149,7 @@ DEINITIALIZE_PLUGIN() {
     NotificationModule_DeInitLibrary();
     RPXLoader_DeInitLibrary();
     SDUtils_DeInitLibrary();
+    Mocha_StopTCPSyslogLogging();
 }
 
 DECL_FUNCTION(uint32_t, SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv) {
