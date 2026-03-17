@@ -15,8 +15,10 @@
 #include <wups.h>
 
 #include <coreinit/title.h>
+#include <nn/acp/title.h>
 #include <nn/spm.h>
 
+#include <coreinit/thread.h>
 #include <malloc.h>
 
 WUPS_PLUGIN_NAME("Aroma Base Plugin");
@@ -126,9 +128,12 @@ INITIALIZE_PLUGIN() {
     }
 }
 
+
+static bool sMassEffectWarningShown = false;
 ON_APPLICATION_START() {
     initLogging();
-    uint64_t titleID = OSGetTitleID();
+    sMassEffectWarningShown = false;
+    uint64_t titleID        = OSGetTitleID();
     if (titleID == 0x0005001010040000L || // Wii U Menu
         titleID == 0x0005001010040100L ||
         titleID == 0x0005001010040200L) {
@@ -187,7 +192,20 @@ DECL_FUNCTION(bool, MCP_Get4SecondOffStatus, int32_t handle) {
     return real_MCP_Get4SecondOffStatus(handle);
 }
 
+DECL_FUNCTION(int32_t, ACPGetLaunchMetaXml, ACPMetaXml *metaxml) {
+    int result = real_ACPGetLaunchMetaXml(metaxml);
+    if (!sMassEffectWarningShown && metaxml && (metaxml->title_id == 0x000500001010DC00 || metaxml->title_id == 0x000500001010F500 || metaxml->title_id == 0x0005000010113000)) {
+        sMassEffectWarningShown = true;
+        NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f);
+        NotificationModule_AddInfoNotification("Booting Mass Effects 3. Aroma will be DISABLED. Closing the game will fully reboot the console.");
+        OSSleepTicks(OSMillisecondsToTicks(3000));
+    }
+
+    return result;
+}
+
 // Only replace for the Wii U Menu
 WUPS_MUST_REPLACE_FOR_PROCESS(IsStorageMaybePcFormatted, WUPS_LOADER_LIBRARY_NN_SPM, IsStorageMaybePcFormatted__Q2_2nn3spmFPbQ3_2nn3spm12StorageIndex, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
 WUPS_MUST_REPLACE_FOR_PROCESS(MCP_Get4SecondOffStatus, WUPS_LOADER_LIBRARY_COREINIT, MCP_Get4SecondOffStatus, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
 WUPS_MUST_REPLACE(SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv, WUPS_LOADER_LIBRARY_NN_NDM, SuspendDaemonsAndDisconnectIfWireless__Q2_2nn3ndmFv);
+WUPS_MUST_REPLACE_FOR_PROCESS(ACPGetLaunchMetaXml, WUPS_LOADER_LIBRARY_NN_ACP, ACPGetLaunchMetaXml, WUPS_FP_TARGET_PROCESS_WII_U_MENU);
