@@ -61,6 +61,7 @@ void ShowHints() {
     if (!gConfigMenuHintShown) {
         NotificationModuleStatus err;
         if ((err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_DURATION_BEFORE_FADE_OUT, 15.0f)) == NOTIFICATION_MODULE_RESULT_SUCCESS &&
+            (err = NotificationModule_SetDefaultValue(NOTIFICATION_MODULE_NOTIFICATION_TYPE_INFO, NOTIFICATION_MODULE_DEFAULT_OPTION_KEEP_UNTIL_SHOWN, true)) == NOTIFICATION_MODULE_RESULT_SUCCESS &&
             (err = NotificationModule_AddInfoNotification("Tip: You can open a configuration menu by pressing \ue052 + \ue07A + \ue046")) == NOTIFICATION_MODULE_RESULT_SUCCESS) {
 
             gConfigMenuHintShown = true;
